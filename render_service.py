@@ -3,6 +3,8 @@ from fastapi.responses import JSONResponse
 from PIL import Image, ImageDraw, ImageFont
 import io
 import base64
+import os
+import uvicorn
 
 app = FastAPI()
 
@@ -53,3 +55,9 @@ async def generate(file: UploadFile = File(...), texto: str = Form(...)):
         result[nombre] = base64.b64encode(buffer.read()).decode("utf-8")
 
     return JSONResponse(content=result)
+
+# 🔧 Agrega esto al final para que funcione en Render
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("render_service:app", host="0.0.0.0", port=port)
+
