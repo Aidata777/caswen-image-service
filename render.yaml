@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: caswen-image-service
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn render_service:app
+    plan: free
