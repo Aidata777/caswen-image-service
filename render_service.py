@@ -34,7 +34,10 @@ def procesar_imagen(img: Image.Image, texto: str, size: tuple) -> Image.Image:
     except:
         font = ImageFont.load_default()
 
-    text_w, text_h = draw.textsize(texto, font=font)
+    # ✅ Usar textbbox en lugar de textsize
+    bbox = draw.textbbox((0, 0), texto, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
     x = (width - text_w) / 2
     y = height - text_h - 80
 
@@ -56,7 +59,7 @@ async def generate(file: UploadFile = File(...), texto: str = Form(...)):
 
     return JSONResponse(content=result)
 
-# 🔧 Agrega esto al final para que funcione en Render
+# 🔧 Para correr en Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("render_service:app", host="0.0.0.0", port=port)
