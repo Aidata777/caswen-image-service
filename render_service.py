@@ -10,7 +10,6 @@ def smart_crop(image: Image.Image, target_width: int, target_height: int) -> Ima
     target_ratio = target_width / target_height
     img_ratio = img_width / img_height
 
-    # Decide crop strategy
     if img_ratio > target_ratio:
         # Crop width
         new_width = int(target_ratio * img_height)
