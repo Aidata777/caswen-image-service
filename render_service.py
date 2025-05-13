@@ -1,30 +1,23 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import StreamingResponse
 from PIL import Image
-from io import BytesIO
-import os
+import io
 
 app = FastAPI()
 
 @app.post("/generate/horizontal")
 async def generate_horizontal(file: UploadFile = File(...)):
-    # Leer imagen de entrada
+    # Leer y abrir la imagen
     contents = await file.read()
-    image = Image.open(BytesIO(contents))
+    image = Image.open(io.BytesIO(contents)).convert("RGB")
+    
+    # Redimensionar inteligentemente a horizontal (por ejemplo 1200x628)
+    target_width, target_height = 1200, 628
+    image = image.resize((target_width, target_height), Image.LANCZOS)
+    
+    # Preparar la respuesta como imagen PNG
+    output = io.BytesIO()
+    image.save(output, format="PNG")
+    output.seek(0)
 
-    # Redimensionar inteligentemente (a modo de ejemplo: 1200x628)
-    target_size = (1200, 628)
-    image = image.convert("RGB")
-    image.thumbnail(target_size, Image.LANCZOS)
-
-    # Crear nuevo fondo blanco y centrar la imagen redimensionada
-    background = Image.new("RGB", target_size, (255, 255, 255))
-    offset = ((target_size[0] - image.width) // 2, (target_size[1] - image.height) // 2)
-    background.paste(image, offset)
-
-    # Convertir a stream para respuesta HTTP
-    img_byte_arr = BytesIO()
-    background.save(img_byte_arr, format='PNG')
-    img_byte_arr.seek(0)
-
-    return StreamingResponse(img_byte_arr, media_type="image/png")
+    return StreamingResponse(output, media_type="image/png")
