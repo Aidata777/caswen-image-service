@@ -1,38 +1,30 @@
-import os
-import uvicorn
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse
 from PIL import Image
 from io import BytesIO
+import os
 
 app = FastAPI()
 
 @app.post("/generate/horizontal")
 async def generate_horizontal(file: UploadFile = File(...)):
+    # Leer imagen de entrada
     contents = await file.read()
     image = Image.open(BytesIO(contents))
 
-    width, height = image.size
-    new_width = int(width)
-    new_height = int(width * 9 / 16)
+    # Redimensionar inteligentemente (a modo de ejemplo: 1200x628)
+    target_size = (1200, 628)
+    image = image.convert("RGB")
+    image.thumbnail(target_size, Image.LANCZOS)
 
-    if new_height > height:
-        new_height = height
-        new_width = int(height * 16 / 9)
+    # Crear nuevo fondo blanco y centrar la imagen redimensionada
+    background = Image.new("RGB", target_size, (255, 255, 255))
+    offset = ((target_size[0] - image.width) // 2, (target_size[1] - image.height) // 2)
+    background.paste(image, offset)
 
-    left = (width - new_width) / 2
-    top = (height - new_height) / 2
-    right = left + new_width
-    bottom = top + new_height
+    # Convertir a stream para respuesta HTTP
+    img_byte_arr = BytesIO()
+    background.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
 
-    cropped = image.crop((left, top, right, bottom))
-
-    output = BytesIO()
-    cropped.save(output, format="PNG")
-    output.seek(0)
-
-    return StreamingResponse(output, media_type="image/png")
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("render_service:app", host="0.0.0.0", port=port, reload=False)
+    return StreamingResponse(img_byte_arr, media_type="image/png")
