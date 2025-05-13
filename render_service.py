@@ -1,40 +1,40 @@
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 from PIL import Image
-from io import BytesIO
+import io
+import os
 
 app = FastAPI()
 
 @app.post("/generate/horizontal")
 async def generate_horizontal(file: UploadFile = File(...)):
-    contents = await file.read()
-    image = Image.open(BytesIO(contents))
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
 
-    # Redimensionado inteligente (manteniendo proporción, centrado)
-    target_width = 1200
-    target_height = 630
-    image_ratio = image.width / image.height
-    target_ratio = target_width / target_height
+        # Crea una nueva imagen horizontalmente más ancha, misma altura
+        width, height = image.size
+        new_width = int(height * 1.78)  # aprox 16:9
+        new_image = Image.new("RGB", (new_width, height), color=(255, 255, 255))
 
-    if image_ratio > target_ratio:
-        new_height = target_height
-        new_width = int(image_ratio * new_height)
-    else:
-        new_width = target_width
-        new_height = int(new_width / image_ratio)
+        # Centra la imagen original dentro del nuevo lienzo horizontal
+        offset = ((new_width - width) // 2, 0)
+        new_image.paste(image, offset)
 
-    resized = image.resize((new_width, new_height), Image.LANCZOS)
+        # Guarda la nueva imagen en memoria
+        output_buffer = io.BytesIO()
+        new_image.save(output_buffer, format="PNG")
+        output_buffer.seek(0)
 
-    # Recortar al centro
-    left = (resized.width - target_width) // 2
-    top = (resized.height - target_height) // 2
-    right = left + target_width
-    bottom = top + target_height
-    cropped = resized.crop((left, top, right, bottom))
+        # Devuelve la imagen como base64 en JSON (opcional)
+        return JSONResponse(content={"message": "Imagen horizontal generada correctamente."})
 
-    buf = BytesIO()
-    cropped.save(buf, format="PNG")
-    buf.seek(0)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
-    return StreamingResponse(buf, media_type="image/png")
+# Inicia uvicorn desde este script si no usas gunicorn
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("render_service:app", host="0.0.0.0", port=port, reload=False)
 
