@@ -1,40 +1,32 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import StreamingResponse
 from PIL import Image
-import io
+from io import BytesIO
 
 app = FastAPI()
 
-def resize_and_crop_to_horizontal(image: Image.Image) -> Image.Image:
-    # Proporción horizontal estándar (16:9 por ejemplo)
-    target_ratio = 16 / 9
-    width, height = image.size
-    current_ratio = width / height
-
-    if current_ratio > target_ratio:
-        # Imagen más ancha que deseado → recortar los lados
-        new_width = int(height * target_ratio)
-        left = (width - new_width) // 2
-        box = (left, 0, left + new_width, height)
-    else:
-        # Imagen más alta que deseado → recortar arriba y abajo
-        new_height = int(width / target_ratio)
-        top = (height - new_height) // 2
-        box = (0, top, width, top + new_height)
-
-    cropped = image.crop(box)
-    return cropped
+def resize_image(image: Image.Image, target_width: int, target_height: int) -> BytesIO:
+    resized_image = image.resize((target_width, target_height), Image.LANCZOS)
+    output = BytesIO()
+    resized_image.save(output, format="PNG")
+    output.seek(0)
+    return output
 
 @app.post("/generate/horizontal")
 async def generate_horizontal(file: UploadFile = File(...)):
-    input_bytes = await file.read()
-    image = Image.open(io.BytesIO(input_bytes)).convert("RGB")
+    image = Image.open(BytesIO(await file.read()))
+    resized = resize_image(image, 1200, 628)
+    return StreamingResponse(resized, media_type="image/png")
 
-    # Procesar la imagen
-    output_image = resize_and_crop_to_horizontal(image)
+@app.post("/generate/vertical")
+async def generate_vertical(file: UploadFile = File(...)):
+    image = Image.open(BytesIO(await file.read()))
+    resized = resize_image(image, 1080, 1350)
+    return StreamingResponse(resized, media_type="image/png")
 
-    # Guardar en buffer y enviar como respuesta
-    output = io.BytesIO()
-    output_image.save(output, format="PNG")
-    output.seek(0)
-    return StreamingResponse(output, media_type="image/png")
+@app.post("/generate/square")
+async def generate_square(file: UploadFile = File(...)):
+    image = Image.open(BytesIO(await file.read()))
+    resized = resize_image(image, 1080, 1080)
+    return StreamingResponse(resized, media_type="image/png")
+
