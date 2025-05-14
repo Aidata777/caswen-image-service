@@ -16,22 +16,21 @@ def smart_crop_resize(image: Image.Image, width: int, height: int) -> Image.Imag
     result = cropper.crop(image, width, height)
     box = result['top_crop']
 
-    # Paso 2: validar si el recorte es realmente útil
+    # Paso 2: si el recorte sugerido es casi igual al tamaño original, forzar recorte centrado
     if box['width'] >= image.width * 0.98 and box['height'] >= image.height * 0.98:
-        # Forzar recorte centrado con proporción 4:5
         original_ratio = image.width / image.height
         if original_ratio > target_ratio:
-            # Imagen más ancha que alta, recortar por los lados
+            # Imagen más ancha que deseado: recortar laterales
             new_width = int(image.height * target_ratio)
             left = (image.width - new_width) // 2
             box_coords = (left, 0, left + new_width, image.height)
         else:
-            # Imagen más alta que ancha, recortar arriba y abajo
+            # Imagen más alta que deseado: recortar arriba y abajo
             new_height = int(image.width / target_ratio)
             top = (image.height - new_height) // 2
             box_coords = (0, top, image.width, top + new_height)
     else:
-        # Usar recorte sugerido por smartcrop
+        # Usar recorte propuesto por smartcrop
         box_coords = (
             box['x'],
             box['y'],
