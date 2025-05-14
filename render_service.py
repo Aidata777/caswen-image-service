@@ -10,26 +10,36 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def smart_crop_resize(image: Image.Image, width: int, height: int) -> Image.Image:
     cropper = smartcrop.SmartCrop()
-    
-    # Forzamos una relación de aspecto deseada
     target_ratio = width / height
-    base_crop_width = image.width
-    base_crop_height = int(base_crop_width / target_ratio)
 
-    if base_crop_height > image.height:
-        base_crop_height = image.height
-        base_crop_width = int(base_crop_height * target_ratio)
+    # Paso 1: pedir sugerencia inteligente
+    result = cropper.crop(image, width, height)
+    box = result['top_crop']
 
-    result = cropper.crop(image, base_crop_width, base_crop_height)
+    # Paso 2: validar si el recorte es realmente útil
+    if box['width'] >= image.width * 0.98 and box['height'] >= image.height * 0.98:
+        # Forzar recorte centrado con proporción 4:5
+        original_ratio = image.width / image.height
+        if original_ratio > target_ratio:
+            # Imagen más ancha que alta, recortar por los lados
+            new_width = int(image.height * target_ratio)
+            left = (image.width - new_width) // 2
+            box_coords = (left, 0, left + new_width, image.height)
+        else:
+            # Imagen más alta que ancha, recortar arriba y abajo
+            new_height = int(image.width / target_ratio)
+            top = (image.height - new_height) // 2
+            box_coords = (0, top, image.width, top + new_height)
+    else:
+        # Usar recorte sugerido por smartcrop
+        box_coords = (
+            box['x'],
+            box['y'],
+            box['x'] + box['width'],
+            box['y'] + box['height']
+        )
 
-    box = (
-        result['top_crop']['x'],
-        result['top_crop']['y'],
-        result['top_crop']['x'] + result['top_crop']['width'],
-        result['top_crop']['y'] + result['top_crop']['height'],
-    )
-
-    cropped = image.crop(box)
+    cropped = image.crop(box_coords)
     resized = cropped.resize((width, height), Image.LANCZOS)
     return resized
 
@@ -40,3 +50,4 @@ async def render_instagram(file: UploadFile = File(...)):
     output_path = os.path.join(OUTPUT_DIR, "instagram.jpg")
     result.save(output_path, "JPEG")
     return FileResponse(output_path, media_type="image/jpeg", filename="instagram.jpg")
+
