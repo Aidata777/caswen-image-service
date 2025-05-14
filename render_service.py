@@ -1,34 +1,53 @@
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import FileResponse
 from PIL import Image
-from io import BytesIO
+import smartcrop
+import os
 
 app = FastAPI()
 
-def smart_crop(image: Image.Image, target_width: int, target_height: int) -> Image.Image:
-    img_width, img_height = image.size
-    target_ratio = target_width / target_height
-    img_ratio = img_width / img_height
+OUTPUT_DIR = "outputs"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    if img_ratio > target_ratio:
-        # Crop width
-        new_width = int(target_ratio * img_height)
-        offset = (img_width - new_width) // 2
-        cropped = image.crop((offset, 0, offset + new_width, img_height))
-    else:
-        # Crop height
-        new_height = int(img_width / target_ratio)
-        offset = (img_height - new_height) // 2
-        cropped = image.crop((0, offset, img_width, offset + new_height))
+def smart_resize(image: Image.Image, width: int, height: int) -> Image.Image:
+    cropper = smartcrop.SmartCrop()
+    result = cropper.crop(image, width, height)
+    box = (
+        result['top_crop']['x'],
+        result['top_crop']['y'],
+        result['top_crop']['x'] + result['top_crop']['width'],
+        result['top_crop']['y'] + result['top_crop']['height'],
+    )
+    cropped = image.crop(box)
+    return cropped.resize((width, height), Image.LANCZOS)
 
-    return cropped.resize((target_width, target_height), Image.LANCZOS)
+@app.post("/render")
+async def render_image(file: UploadFile = File(...)):
+    input_image = Image.open(file.file).convert("RGB")
 
-@app.post("/generate/horizontal")
-async def generate_horizontal(file: UploadFile = File(...), text: str = Form(...)):
-    img = Image.open(BytesIO(await file.read()))
-    resized = smart_crop(img, 1280, 720)
+    sizes = {
+        "horizontal": (1200, 675),
+        "square": (1080, 1080),
+        "vertical": (1080, 1350)
+    }
 
-    output = BytesIO()
-    resized.save(output, format="PNG")
-    output.seek(0)
-    return StreamingResponse(output, media_type="image/png")
+    output_files = {}
+
+    for name, (w, h) in sizes.items():
+        resized = smart_resize(input_image, w, h)
+        out_path = os.path.join(OUTPUT_DIR, f"{name}.jpg")
+        resized.save(out_path, "JPEG")
+        output_files[name] = out_path
+
+    return {
+        "horizontal": f"/download/horizontal",
+        "square": f"/download/square",
+        "vertical": f"/download/vertical"
+    }
+
+@app.get("/download/{size}")
+async def download_image(size: str):
+    path = os.path.join(OUTPUT_DIR, f"{size}.jpg")
+    if not os.path.exists(path):
+        return {"error": "File not found"}
+    return FileResponse(path, media_type="image/jpeg", filename=f"{size}.jpg")
